@@ -38,7 +38,7 @@ namespace WpfMath
         private static readonly string[][] delimiterNames =
         {
             new[] { "lbrace", "rbrace" },
-            new[] { "lsqbrack", "rsqbrack" },
+            new[] { "(", ")" },
             new[] { "lbrack", "rbrack" },
             new[] { "downarrow", "downarrow" },
             new[] { "uparrow", "uparrow" },
@@ -216,7 +216,7 @@ namespace WpfMath
                         TexAtomType.Ordinary,
                         TexAtomType.Ordinary);
                     var scriptsAtom = this.AttachScripts(formula, value, ref position, groupAtom);
-                    formula.Add(scriptsAtom, value.Segment(initialPosition, scriptsAtom.Source.Length));
+                    formula.Add(scriptsAtom, value.Segment(initialPosition, position - initialPosition));
                 }
                 else if (ch == rightGroupChar)
                 {
@@ -242,6 +242,26 @@ namespace WpfMath
                         skipWhiteSpace);
                     formula.Add(scriptsAtom, value.Segment(initialPosition, position));
                 }
+            }
+
+            return formula;
+        }
+
+        private static TexFormula ConvertRawText(SourceSpan value, string textStyle)
+        {
+            var formula = new TexFormula { TextStyle = textStyle };
+
+            var position = 0;
+            var initialPosition = position;
+            while (position < value.Length)
+            {
+                var ch = value[position];
+                var source = value.Segment(position, 1);
+                var atom = IsWhiteSpace(ch)
+                    ? (Atom) new SpaceAtom(source)
+                    : new CharAtom(source, ch, textStyle);
+                position++;
+                formula.Add(atom, value.Segment(initialPosition, position - initialPosition));
             }
 
             return formula;
@@ -487,10 +507,15 @@ namespace WpfMath
             {
                 // Text style was found.
                 SkipWhiteSpace(value, ref position);
-                var styledFormula = this.Parse(ReadElement(value, ref position), command);
+
+                var styledFormula = command == TexUtilities.TextStyleName
+                    ? ConvertRawText(ReadElement(value, ref position), command)
+                    : Parse(ReadElement(value, ref position), command);
+
                 if (styledFormula.RootAtom == null)
                     throw new TexParseException("Styled text can't be empty!");
-                var atom = this.AttachScripts(formula, value, ref position, styledFormula.RootAtom);
+
+                var atom = AttachScripts(formula, value, ref position, styledFormula.RootAtom);
                 var source = new SourceSpan(formulaSource.Source, formulaSource.Start, position);
                 formula.Add(atom, source);
             }
